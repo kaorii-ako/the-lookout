@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Lookout: how big US and Thai stocks behave in selloffs</title>
+<meta name="description" content="Daily-updated selloff study of the Nasdaq-100's largest 50 stocks and SET100: pullbacks, sectors, downside beta and a stress test.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@112,500;112,700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<style>
+:root {
+  --color-bg: #eef1f4; --color-panel: #ffffff; --color-fg: #14202b; --color-fg-muted: #586673; --color-border-line: #d5dce3;
+  --color-ok: #23805f; --color-warn: #b97800; --color-bad: #c0392b;
+  --series-1: #2457c5; --series-2: #8a99a6;
+  --font-anthropic-sans: "Public Sans", system-ui, sans-serif; --font-anthropic-serif: "Archivo", "Public Sans", sans-serif;
+  --cds-font-size-caption: 0.8125rem; --cds-font-size-body: 1rem; --cds-font-size-heading: 1.25rem; --cds-font-size-title: 2rem;
+  --cds-font-weight-medium: 600;
+  --cds-gap-xs: 4px; --cds-gap-sm: 8px; --cds-gap-md: 12px; --cds-gap-lg: 20px; --cds-gap-xl: 40px;
+  --cds-pad-xs: 4px; --cds-pad-sm: 8px; --cds-pad-md: 12px; --cds-pad-lg: 16px; --cds-pad-xl: 24px;
+  --cds-radius: 6px; --cds-text-secondary: #586673;
+  --cds-chart-grid: #e1e6eb; --cds-chart-axis: #b7c1ca; --cds-chart-reference: #7d8a96; --cds-chart-muted: #b7c1ca; --cds-chart-status-critical: #c0392b;
+  --cds-surface-popover: #ffffff; --cds-border: #d5dce3; --cds-shadow-popover: 0 6px 20px rgba(20, 32, 43, 0.14);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0f171e; --color-panel: #16212b; --color-fg: #e4eaf0; --color-fg-muted: #93a1ad; --color-border-line: #26333f;
+    --color-ok: #4cc49a; --color-warn: #e3a72f; --color-bad: #ef6a5a; --series-1: #6f9cff; --series-2: #6b7b88;
+    --cds-text-secondary: #93a1ad; --cds-chart-grid: #1f2b36; --cds-chart-axis: #3a4855; --cds-chart-reference: #7d8a96; --cds-chart-muted: #3a4855;
+    --cds-chart-status-critical: #ef6a5a; --cds-surface-popover: #1b2833; --cds-border: #2c3a46; --cds-shadow-popover: 0 6px 20px rgba(0, 0, 0, 0.5);
+  }
+}
+html { background: var(--color-bg); }
+body { margin: 0; background: var(--color-bg); color: var(--color-fg); font-family: var(--font-anthropic-sans); }
+.page { max-width: 1180px; margin: 0 auto; padding: 28px clamp(14px, 4vw, 40px) 60px; }
+.brand { font-family: var(--font-anthropic-serif); font-stretch: 112%; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.02em; color: var(--series-1); margin-bottom: 14px; }
+.sb h1 { font-stretch: 112%; font-weight: 700 !important; line-height: 1.1; }
+.sb h3 { font-size: var(--cds-font-size-body); font-weight: var(--cds-font-weight-medium); margin: 0 0 var(--cds-gap-sm); }
+.sb-flags { margin: var(--cds-gap-sm) 0 var(--cds-gap-md); padding-left: 1.2em; line-height: 1.6; }
+.sb-flags:empty { display: none; }
+.dash-skeleton { position: relative; color: transparent !important; min-height: 1.2em; }
+.dash-skeleton::after { content: ""; position: absolute; inset: 0; border-radius: 4px; background: var(--color-border-line); opacity: 0.6; }
+.dash-select { font: inherit; padding: 6px 28px 6px 10px; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background-color: var(--color-panel); color: var(--color-fg); }
+a { color: var(--series-1); }
+.foot { margin-top: 40px; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+</style>
+<script>
+window.DATA = {};
+window.LOADERR = false;
+window.__DRAWS = {};
+window.dash = {
+  colors: ['var(--series-1)', 'var(--series-2)'],
+  data(id) { return DATA[id] ? { status: 'ok', data: DATA[id] } : { status: LOADERR ? 'error' : 'loading', data: [] }; },
+  draw(name, fn) {
+    if (fn) __DRAWS[name] = fn;
+    const f = __DRAWS[name];
+    if (!f) return;
+    document.querySelectorAll('[data-draw="' + name + '"]').forEach((el) => { try { f(el); } catch (e) { console.error(name, e); } });
+  },
+  drawAll() { Object.keys(__DRAWS).forEach((n) => dash.draw(n)); },
+};
+</script>
+</head>
+<body>
+<div class="page">
+<div class="brand">The Lookout</div>
+<style>
+.sb { display: flex; flex-direction: column; gap: var(--cds-gap-xl); font-family: var(--font-anthropic-sans); color: var(--color-fg); }
+.sb h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; }
+.sb h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0 0 var(--cds-gap-xs); }
+.sb p { margin: 0; max-width: 72ch; line-height: 1.5; }
+.sb .sb-muted { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+.sb-lede { font-size: var(--cds-font-size-body); }
+.sb-toggle { display: inline-flex; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); overflow: hidden; }
+.sb-toggle button { font: inherit; padding: var(--cds-pad-sm) var(--cds-pad-md); border: 0; background: var(--color-bg); color: var(--color-fg-muted); cursor: pointer; }
+.sb-toggle button[aria-pressed="true"] { background: var(--color-panel); color: var(--color-fg); font-weight: var(--cds-font-weight-medium); }
+.sb-toggle button:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -2px; }
+.sb-bar { display: flex; flex-wrap: wrap; gap: var(--cds-gap-md); align-items: center; position: sticky; top: 0; z-index: 3; background: var(--color-bg); padding: var(--cds-pad-sm) 0; }
+.sb-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--cds-gap-md); min-height: 96px; }
+.sb-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: flex; flex-direction: column; gap: var(--cds-gap-xs); }
+.sb-card .sb-big { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; }
+.sb-chart { position: relative; min-height: 260px; }
+.sb-chart svg { display: block; overflow: visible; }
+.sb-chart text { font-size: var(--cds-font-size-caption); fill: var(--cds-text-secondary); }
+.sb-chart .tick line { stroke: var(--cds-chart-grid); }
+.sb-chart .domain { stroke: var(--cds-chart-axis); }
+.sb-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); box-shadow: var(--cds-shadow-popover); border-radius: var(--cds-radius); padding: var(--cds-pad-sm) var(--cds-pad-md); font-size: var(--cds-font-size-caption); line-height: 1.4; max-width: 240px; z-index: 5; }
+.sb-wrap { overflow-x: auto; }
+.sb-scroll { max-height: 520px; overflow-y: auto; }
+.sb table { border-collapse: collapse; width: 100%; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+.sb th, .sb td { text-align: right; padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+.sb th:first-child, .sb td:first-child, .sb th.sb-l, .sb td.sb-l { text-align: left; }
+.sb th { font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); position: sticky; top: 0; background: var(--color-bg); }
+.sb th[data-sort] { cursor: pointer; }
+.sb th[aria-sort="descending"]::after { content: " ↓"; }
+.sb th[aria-sort="ascending"]::after { content: " ↑"; }
+.sb td.sb-wrapcell { white-space: normal; min-width: 160px; text-align: left; }
+.sb .sb-bad { color: var(--color-bad); }
+.sb .sb-ok { color: var(--color-ok); }
+.sb-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--cds-gap-xl); }
+.sb-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--cds-gap-lg); min-height: 120px; }
+.sb-lists ol { margin: var(--cds-gap-xs) 0 0; padding-left: 1.4em; font-variant-numeric: tabular-nums; line-height: 1.7; }
+.sb-ctrl { display: flex; flex-wrap: wrap; gap: var(--cds-gap-md); align-items: center; margin: var(--cds-gap-sm) 0; }
+.sb-ctrl input[type=range] { width: min(320px, 100%); }
+.sb-ctrl .sb-big { font-family: var(--font-anthropic-serif); font-size: var(--cds-font-size-heading); font-variant-numeric: tabular-nums; min-width: 4ch; }
+.sb details { border-top: 1px solid var(--color-border-line); padding-top: var(--cds-pad-md); }
+.sb details summary { cursor: pointer; font-weight: var(--cds-font-weight-medium); }
+.sb details ul { line-height: 1.6; max-width: 80ch; }
+.sb-warn { border-left: 3px solid var(--color-warn); padding-left: var(--cds-pad-md); }
+@media print { .sb-bar { position: static; } .sb-scroll { max-height: none; } }
+</style>
+
+<div class="sb">
+  <header id="top">
+    <h1>How the biggest US and Thai stocks behave when the market falls</h1>
+    <p class="sb-lede" data-draw="takeaway">—</p>
+    <p class="sb-muted"><span data-draw="updated">—</span> Two years of daily closes for the top half of the Nasdaq-100 by market cap and SET100. Everything here describes the past. It is not a forecast and not financial advice.</p>
+  </header>
+
+  <div class="sb-bar">
+    <div class="sb-toggle" role="group" aria-label="Market">
+      <button type="button" data-market="us" aria-pressed="true">US: Nasdaq-100 top 50</button>
+      <button type="button" data-market="th" aria-pressed="false">Thailand: SET100</button>
+    </div>
+    <span class="sb-muted" data-draw="indexname">—</span>
+  </div>
+
+  <section id="now">
+    <h2>Today's lookout</h2>
+    <p class="sb-lede" data-draw="lookline">—</p>
+    <ul class="sb-flags" data-draw="flags"></ul>
+    <div class="sb-cards" data-draw="cards"></div>
+    <div class="sb-grid2" style="margin-top: var(--cds-gap-lg)">
+      <div>
+        <h3>Levels to watch</h3>
+        <div class="sb-wrap">
+          <table>
+            <thead><tr><th class="sb-l">Level</th><th>Index value</th><th>Distance from last close</th></tr></thead>
+            <tbody data-draw="levels"></tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h3>Sectors on the last day and the last 5 days</h3>
+        <div class="sb-wrap">
+          <table>
+            <thead><tr><th class="sb-l">Sector</th><th>Last day</th><th>5 days</th><th>Downside beta</th></tr></thead>
+            <tbody data-draw="sectortoday"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <h3 style="margin-top: var(--cds-gap-lg)">Big moves on the last day</h3>
+    <p data-draw="movers">—</p>
+    <h3 style="margin-top: var(--cds-gap-lg)">Daily log</h3>
+    <div class="sb-wrap sb-scroll" style="max-height: 320px">
+      <table>
+        <thead><tr><th class="sb-l">Date</th><th>Close</th><th>Day</th><th>Below peak</th><th>Stocks above 50-day</th><th>Stocks 20%+ off high</th></tr></thead>
+        <tbody data-draw="log"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="index">
+    <h2>The index and every pullback of 5% or more</h2>
+    <p class="sb-muted">Shaded spans run from each peak to its low. The second line is an equal-weight average of the stocks, which shows whether the typical stock fell as much as the index.</p>
+    <div class="sb-chart" data-draw="indexchart"></div>
+  </section>
+
+  <section id="pullbacks">
+    <h2>Each pullback, and who held up</h2>
+    <div class="sb-wrap">
+      <table data-source="episodes" data-row-key="m,ep">
+        <thead><tr>
+          <th class="sb-l" data-field="peak">Peak</th>
+          <th class="sb-l" data-field="trough">Low</th>
+          <th data-field="index_dd">Index fall</th>
+          <th data-field="median_stock">Median stock</th>
+          <th data-field="share_worse">Share of stocks worse than index</th>
+          <th data-field="days_down">Days falling</th>
+          <th data-field="days_to_recover">Days to new high</th>
+          <th class="sb-l" data-field="held_best">Held up best</th>
+          <th class="sb-l" data-field="fell_most">Fell most</th>
+          <th class="sb-l" data-field="bounced_first">Bounced most in 20 days after the low</th>
+        </tr></thead>
+        <tbody data-draw="eptable"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="sectors">
+    <h2>Sectors in a falling market</h2>
+    <p class="sb-muted">Downside beta: how much a sector's equal-weight average moved for each 1% the index fell, across all down days. Below 1 means it fell less than the index.</p>
+    <div class="sb-grid2">
+      <div class="sb-chart" data-draw="sectorbars"></div>
+      <div class="sb-wrap">
+        <table data-source="sectors" data-row-key="m,sector">
+          <thead><tr>
+            <th class="sb-l" data-field="sector">Sector</th>
+            <th data-field="avg_on_worst_days">Avg on index's worst 10% of days</th>
+            <th data-field="corr_all">Stocks move together, all days</th>
+            <th data-field="corr_down">On worst days</th>
+            <th data-field="cur_dd">Below its 2-year high now</th>
+          </tr></thead>
+          <tbody data-draw="sectortable"></tbody>
+        </table>
+      </div>
+    </div>
+    <h2 style="margin-top: var(--cds-gap-lg)">Sector returns in each pullback</h2>
+    <p class="sb-muted">Average return of the sector's stocks from the index peak to the index low.</p>
+    <div class="sb-chart" data-draw="heat"></div>
+  </section>
+
+  <section id="stocks">
+    <h2>Every stock: how hard it falls and whether it holds up</h2>
+    <p class="sb-muted">Across: downside beta. Up: median return versus the index during the pullbacks above. Stocks in the top left fall less and tend to beat the index in selloffs.</p>
+    <div class="sb-ctrl">
+      <label for="sb-sector">Highlight a sector</label>
+      <select id="sb-sector" class="dash-select" data-draw="sectorpick" aria-label="Highlight a sector"></select>
+    </div>
+    <div class="sb-chart" data-draw="scatter"></div>
+    <div class="sb-wrap sb-scroll">
+      <table data-source="stocks" data-row-key="m,t" id="sb-stocktable">
+        <thead><tr>
+          <th class="sb-l" data-field="t" data-sort="t">Stock</th>
+          <th class="sb-l" data-field="sector" data-sort="sector">Sector</th>
+          <th data-field="beta_down" data-sort="beta_down" aria-sort="descending">Downside beta</th>
+          <th data-sort="ep_held">Pullbacks it beat the index</th>
+          <th data-field="ep_rs_med" data-sort="ep_rs_med">Median vs index in pullbacks</th>
+          <th data-field="ep_rebound_med" data-sort="ep_rebound_med">Median bounce, 20 days after low</th>
+          <th data-field="max_dd" data-sort="max_dd">Worst drawdown, 2 years</th>
+          <th data-field="cur_dd" data-sort="cur_dd">Below 2-year high now</th>
+          <th data-field="rs20" data-sort="rs20">Last 20 days vs index</th>
+          <th data-sort="above_50">Above 50-day average</th>
+        </tr></thead>
+        <tbody data-draw="stocktable"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="watch">
+    <h2>Holding up and breaking down right now</h2>
+    <p class="sb-muted">Ranked by return versus the index over the last 20 trading days.</p>
+    <div class="sb-lists" data-draw="watch"></div>
+  </section>
+
+  <section id="stress">
+    <h2>Stress test: if the index fell this much from here</h2>
+    <p class="sb-warn">This applies each stock's past behaviour to a fall you choose. Past betas drift, and a new selloff can be led by different stocks. Treat it as a rough range, not a prediction.</p>
+    <div class="sb-ctrl">
+      <label for="sb-fall">Index fall</label>
+      <input id="sb-fall" type="range" min="5" max="40" step="1" value="10">
+      <span class="sb-big" data-draw="falllabel">—</span>
+    </div>
+    <div class="sb-wrap sb-scroll">
+      <table>
+        <thead><tr>
+          <th class="sb-l">Stock</th>
+          <th class="sb-l">Sector</th>
+          <th>Estimate from downside beta</th>
+          <th>Range from past pullbacks</th>
+        </tr></thead>
+        <tbody data-draw="stresstable"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <details>
+    <summary>How this was worked out, and what it leaves out</summary>
+    <ul>
+      <li>Prices are Yahoo Finance daily closes, adjusted for splits but not for dividends or rights issues.</li>
+      <li>US index: the Nasdaq-100 (NDX). Thai index: the TDEX fund, which tracks SET50, because Yahoo returns no history for the SET index itself.</li>
+      <li>A pullback runs from an index closing high to its lowest close before the next new high, and counts if that fall is 5% or more. The Thai series starts on 20 Nov 2024, so its first pullback began earlier than shown.</li>
+      <li>Downside beta is the slope of a stock's daily return against the index's on days the index fell. "Beat the index" means the stock's return from the index peak to its low was higher than the index's.</li>
+      <li>Stocks with under 60 days of history are left out (<span data-draw="excluded">—</span>). Newer listings such as GULF (merged April 2025), TIDLOR and THAI (relisted August 2025) have shorter histories, so fewer pullbacks count for them.</li><li>The data updates automatically after each Thai and US close. The stress test applies past betas to a fall you choose; it is not a prediction.</li>
+      <li>Sectors are broad groups chosen for this study, not official GICS or SET classifications.</li>
+    </ul>
+  </details>
+</div>
+
+<script>
+window.SB = { m: 'us', sort: { key: 'beta_down', dir: -1 }, sector: '' };
+window.sbPct = (v, d = 1, sign = true) => v == null || isNaN(v) ? '—' : (sign && v > 0 ? '+' : '') + (v * 100).toFixed(d).replace('-', '−') + '%';
+window.sbDate = (s) => d3.utcFormat('%-d %b %Y')(d3.utcParse('%Y-%m-%d')(s));
+window.sbRows = (id) => { const r = dash.data(id); return r.status === 'ok' ? r.data.filter((x) => x.m === SB.m) : null; };
+window.sbStatus = (id) => dash.data(id).status;
+window.sbEmpty = (el, id) => {
+  const st = sbStatus(id);
+  el.replaceChildren();
+  if (st === 'loading') { el.classList.add('dash-skeleton'); return; }
+  el.classList.remove('dash-skeleton');
+  if (st === 'error') { const p = document.createElement('p'); p.className = 'sb-muted'; p.textContent = 'This part could not load its data.'; el.append(p); }
+  else el.textContent = '—';
+};
+window.sbTip = (box) => {
+  let t = box.querySelector('.sb-tip');
+  if (!t) { t = document.createElement('div'); t.className = 'sb-tip'; t.hidden = true; box.append(t); }
+  return {
+    show(ev, lines) {
+      t.replaceChildren(...lines.map((l, i) => { const d = document.createElement('div'); d.textContent = l; if (i === 0) d.style.fontWeight = '600'; return d; }));
+      t.hidden = false;
+      const b = box.getBoundingClientRect();
+      let x = ev.clientX - b.left + 12, y = ev.clientY - b.top + 12;
+      if (x + t.offsetWidth > b.width) x = Math.max(0, ev.clientX - b.left - t.offsetWidth - 12);
+      t.style.left = x + 'px'; t.style.top = y + 'px';
+    },
+    hide() { t.hidden = true; }
+  };
+};
+window.SB_DRAWS = ['indexname', 'cards', 'lookline', 'flags', 'levels', 'sectortoday', 'movers', 'log', 'indexchart', 'eptable', 'sectorbars', 'sectortable', 'heat', 'sectorpick', 'scatter', 'stocktable', 'watch', 'falllabel', 'stresstable'];
+window.sbRedraw = () => SB_DRAWS.forEach((n) => dash.draw(n));
+
+document.querySelectorAll('.sb-toggle button').forEach((b) => b.addEventListener('click', () => {
+  SB.m = b.getAttribute('data-market');
+  SB.sector = '';
+  document.querySelectorAll('.sb-toggle button').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+  sbRedraw();
+}));
+document.querySelectorAll('#sb-stocktable th[data-sort]').forEach((th) => th.addEventListener('click', () => {
+  const k = th.getAttribute('data-sort');
+  SB.sort = { key: k, dir: SB.sort.key === k ? -SB.sort.dir : (k === 't' || k === 'sector' ? 1 : -1) };
+  document.querySelectorAll('#sb-stocktable th[data-sort]').forEach((o) => o.removeAttribute('aria-sort'));
+  th.setAttribute('aria-sort', SB.sort.dir < 0 ? 'descending' : 'ascending');
+  dash.draw('stocktable');
+}));
+document.querySelectorAll('#sb-fall').forEach((inp) => inp.addEventListener('input', () => { dash.draw('falllabel'); dash.draw('stresstable'); }));
+</script>
+
+<script>
+dash.draw('takeaway', (el) => {
+  const r = dash.data('state');
+  if (r.status !== 'ok') { sbEmpty(el, 'state'); return; }
+  el.classList.remove('dash-skeleton');
+  const us = r.data.find((x) => x.m === 'us'), th = r.data.find((x) => x.m === 'th');
+  const span = (row, f, txt) => { const s = document.createElement('span'); s.setAttribute('data-source', 'state'); s.setAttribute('data-field', f); s.setAttribute('data-where', 'm=' + row.m); s.textContent = txt; return s; };
+  el.replaceChildren(
+    'The Nasdaq-100 closed ', span(us, 'index_dd', sbPct(-us.index_dd, 1, false)), ' below its ' + sbDate(us.index_peak_date) + ' peak, after falling ',
+    span(us, 'index_r5', sbPct(-us.index_r5, 1, false)), ' in five trading days. SET50 is ', span(th, 'index_dd', sbPct(-th.index_dd, 1, false)),
+    ' below its ' + sbDate(th.index_peak_date) + ' peak.'
+  );
+});
+
+dash.draw('indexname', (el) => {
+  const r = sbRows('state');
+  if (!r) { el.textContent = '—'; return; }
+  const s = r[0];
+  el.textContent = 'Benchmark: ' + s.index_label + '. ' + s.n + ' stocks. Last close ' + sbDate(s.last_date) + '.';
+});
+
+dash.draw('cards', (el) => {
+  const r = sbRows('state');
+  if (!r) { sbEmpty(el, 'state'); return; }
+  el.classList.remove('dash-skeleton');
+  const s = r[0];
+  const cards = [
+    ['index_dd', 'Index below its peak', sbPct(s.index_dd), 'Peak close ' + sbDate(s.index_peak_date), true],
+    ['index_r5', 'Index, last 5 trading days', sbPct(s.index_r5), 'Last 20 days ' + sbPct(s.index_r20), s.index_r5 < 0],
+    ['pct_above_50', 'Stocks above their 50-day average', sbPct(s.pct_above_50, 0, false), 'Above 200-day: ' + sbPct(s.pct_above_200, 0, false), s.pct_above_50 < 0.5],
+    ['pct_20_off_high', 'Stocks 20% or more below their 52-week high', sbPct(s.pct_20_off_high, 0, false), '10% or more below: ' + sbPct(s.pct_10_off_high, 0, false), s.pct_20_off_high > 0.3],
+  ];
+  el.replaceChildren(...cards.map(([f, label, val, sub, bad]) => {
+    const c = document.createElement('div'); c.className = 'sb-card';
+    const l = document.createElement('div'); l.className = 'sb-muted'; l.textContent = label;
+    const v = document.createElement('div'); v.className = 'sb-big' + (bad ? ' sb-bad' : '');
+    v.setAttribute('data-source', 'state'); v.setAttribute('data-field', f); v.setAttribute('data-where', 'm=' + SB.m); v.textContent = val;
+    const u = document.createElement('div'); u.className = 'sb-muted'; u.textContent = sub;
+    c.append(l, v, u); return c;
+  }));
+});
+</script>
+
+<script>
+dash.draw('indexchart', (el) => {
+  const ser = sbRows('series'), eps = sbRows('episodes');
+  if (!ser || !eps) { sbEmpty(el, sbStatus('series') !== 'ok' ? 'series' : 'episodes'); return; }
+  el.classList.remove('dash-skeleton');
+  el.setAttribute('data-source', 'series episodes');
+  const p = d3.utcParse('%Y-%m-%d');
+  const base = ser[0].index;
+  const pts = ser.map((d) => ({ date: p(d.date), idx: d.index / base * 100, ew: d.ew, raw: d.index, dd: d.dd, s: d.date }));
+  const W = el.clientWidth || 600, H = 300, m = { t: 12, r: 64, b: 26, l: 40 };
+  el.replaceChildren();
+  const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('role', 'img')
+    .attr('aria-label', 'Index and equal-weight average over two years, with pullbacks of 5% or more shaded');
+  const x = d3.scaleUtc().domain(d3.extent(pts, (d) => d.date)).range([m.l, W - m.r]);
+  const vals = pts.flatMap((d) => [d.idx, d.ew]).filter((v) => v != null);
+  const y = d3.scaleLinear().domain(d3.extent(vals)).nice().range([H - m.b, m.t]);
+  const g = svg.append('g');
+  eps.forEach((e) => {
+    const x0 = x(p(e.peak)), x1 = x(p(e.trough));
+    g.append('rect').attr('x', x0).attr('y', m.t).attr('width', Math.max(1, x1 - x0)).attr('height', H - m.b - m.t)
+      .style('fill', 'var(--cds-chart-status-critical)').style('opacity', 0.12);
+    g.append('text').attr('x', (x0 + x1) / 2).attr('y', m.t + 12).attr('text-anchor', 'middle').text(sbPct(e.index_dd, 0));
+  });
+  svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(Math.max(2, Math.floor(W / 110))).tickFormat(d3.utcFormat('%b %y')));
+  svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(W - m.l - m.r))).call((a) => a.select('.domain').remove());
+  const line = (k) => d3.line().defined((d) => d[k] != null).x((d) => x(d.date)).y((d) => y(d[k]));
+  svg.append('path').datum(pts).attr('d', line('ew')).style('fill', 'none').style('stroke', dash.colors[1]).style('stroke-width', 1.5);
+  svg.append('path').datum(pts).attr('d', line('idx')).style('fill', 'none').style('stroke', dash.colors[0]).style('stroke-width', 2);
+  const last = pts[pts.length - 1], lastEw = [...pts].reverse().find((d) => d.ew != null);
+  const ly = [y(last.idx), y(lastEw.ew)];
+  if (Math.abs(ly[0] - ly[1]) < 14) { if (ly[0] < ly[1]) { ly[0] -= 7; ly[1] += 7; } else { ly[0] += 7; ly[1] -= 7; } }
+  svg.append('text').attr('x', W - m.r + 4).attr('y', ly[0] + 4).text('Index').style('fill', dash.colors[0]);
+  svg.append('text').attr('x', W - m.r + 4).attr('y', ly[1] + 4).text('Equal wt').style('fill', dash.colors[1]);
+  const tip = sbTip(el);
+  const dot = svg.append('circle').attr('r', 4).style('fill', dash.colors[0]).style('display', 'none');
+  svg.append('rect').attr('x', m.l).attr('y', m.t).attr('width', W - m.l - m.r).attr('height', H - m.t - m.b).style('fill', 'transparent')
+    .on('pointermove', (ev) => {
+      const [mx] = d3.pointer(ev);
+      const dt = x.invert(mx); const i = d3.bisector((d) => d.date).center(pts, dt); const d = pts[i];
+      dot.style('display', null).attr('cx', x(d.date)).attr('cy', y(d.idx));
+      tip.show(ev, [sbDate(d.s), 'Index ' + d3.format(',.2f')(d.raw), 'Below peak ' + sbPct(d.dd), d.ew != null ? 'Equal weight ' + d3.format('.1f')(d.ew) : '']);
+    })
+    .on('pointerleave', () => { tip.hide(); dot.style('display', 'none'); });
+});
+
+dash.draw('eptable', (tb) => {
+  const eps = sbRows('episodes');
+  tb.replaceChildren();
+  if (!eps) return;
+  eps.forEach((e) => {
+    const tr = document.createElement('tr'); tr.setAttribute('data-key', e.m + ',' + e.ep);
+    const cells = [
+      [sbDate(e.peak), 'sb-l'], [sbDate(e.trough) + (e.recovered ? '' : ' (so far)'), 'sb-l'],
+      [sbPct(e.index_dd), 'sb-bad'], [sbPct(e.median_stock), ''], [sbPct(e.share_worse, 0, false), ''],
+      [String(e.days_down), ''], [e.days_to_recover == null ? 'not yet' : String(e.days_to_recover), ''],
+      [e.held_best, 'sb-wrapcell'], [e.fell_most, 'sb-wrapcell'], [e.bounced_first || 'still falling', 'sb-wrapcell'],
+    ];
+    cells.forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.append(td); });
+    tb.append(tr);
+  });
+});
+</script>
+
+<script>
+dash.draw('sectorbars', (el) => {
+  const s = sbRows('sectors');
+  if (!s) { sbEmpty(el, 'sectors'); return; }
+  el.classList.remove('dash-skeleton');
+  el.setAttribute('data-source', 'sectors');
+  const rows = [...s].sort((a, b) => a.beta_down - b.beta_down);
+  const W = el.clientWidth || 400, bh = 24, m = { t: 8, r: 44, b: 24, l: 8 };
+  el.replaceChildren();
+  const svg = d3.select(el).append('svg').attr('width', '100%').attr('role', 'img').attr('aria-label', 'Downside beta by sector');
+  const tmp = svg.append('g');
+  const lw = d3.max(rows, (r) => tmp.append('text').text(r.sector).node().getComputedTextLength()) || 90; tmp.remove();
+  m.l = lw + 12;
+  const H = m.t + m.b + rows.length * bh;
+  svg.attr('viewBox', `0 0 ${W} ${H}`);
+  const x = d3.scaleLinear().domain([Math.min(0, d3.min(rows, (r) => r.beta_down)), Math.max(1.2, d3.max(rows, (r) => r.beta_down))]).nice().range([m.l, W - m.r]);
+  const y = d3.scaleBand().domain(rows.map((r) => r.sector)).range([m.t, H - m.b]).padding(0.25);
+  svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(4));
+  svg.append('line').attr('x1', x(1)).attr('x2', x(1)).attr('y1', m.t).attr('y2', H - m.b).style('stroke', 'var(--cds-chart-reference)').style('stroke-dasharray', '3 3');
+  const tip = sbTip(el);
+  const g = svg.selectAll('g.r').data(rows).join('g');
+  g.append('text').attr('x', m.l - 6).attr('y', (r) => y(r.sector) + y.bandwidth() / 2 + 4).attr('text-anchor', 'end').text((r) => r.sector);
+  g.append('rect').attr('x', (r) => x(Math.min(0, r.beta_down))).attr('y', (r) => y(r.sector)).attr('height', y.bandwidth())
+    .attr('width', (r) => Math.abs(x(r.beta_down) - x(0)))
+    .style('fill', (r) => r.beta_down > 1 ? 'var(--cds-chart-status-critical)' : dash.colors[0])
+    .on('pointermove', (ev, r) => tip.show(ev, [r.sector, 'Downside beta ' + r.beta_down.toFixed(2), r.n + ' stocks: ' + r.members, 'Worst 2-year drawdown ' + sbPct(r.max_dd)]))
+    .on('pointerleave', () => tip.hide());
+  g.append('text').attr('x', (r) => x(Math.max(0, r.beta_down)) + 4).attr('y', (r) => y(r.sector) + y.bandwidth() / 2 + 4)
+    .attr('data-source', 'sectors').attr('data-field', 'beta_down').attr('data-where', (r) => 'm=' + r.m + '&sector=' + encodeURIComponent(r.sector))
+    .text((r) => r.beta_down.toFixed(2));
+});
+
+dash.draw('sectortable', (tb) => {
+  const s = sbRows('sectors');
+  tb.replaceChildren();
+  if (!s) return;
+  [...s].sort((a, b) => a.avg_on_worst_days - b.avg_on_worst_days).reverse().forEach((r) => {
+    const tr = document.createElement('tr'); tr.setAttribute('data-key', r.m + ',' + encodeURIComponent(r.sector));
+    [[r.sector, 'sb-l'], [sbPct(r.avg_on_worst_days, 2), r.avg_on_worst_days < r.index_on_worst_days ? 'sb-bad' : ''],
+     [r.corr_all == null ? '—' : r.corr_all.toFixed(2), ''], [r.corr_down == null ? '—' : r.corr_down.toFixed(2), ''], [sbPct(r.cur_dd), '']]
+      .forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.append(td); });
+    tb.append(tr);
+  });
+});
+
+dash.draw('heat', (el) => {
+  const se = sbRows('sectorep'), eps = sbRows('episodes');
+  if (!se || !eps) { sbEmpty(el, 'sectorep'); return; }
+  el.classList.remove('dash-skeleton');
+  el.setAttribute('data-source', 'sectorep episodes');
+  const sectors = [...new Set(se.map((r) => r.sector))].sort();
+  const W = el.clientWidth || 600, ch = 26, m = { t: 34, r: 8, b: 8, l: 8 };
+  el.replaceChildren();
+  const svg = d3.select(el).append('svg').attr('width', '100%').attr('role', 'img').attr('aria-label', 'Average sector return in each pullback');
+  const tmp = svg.append('g');
+  m.l = (d3.max(sectors, (s) => tmp.append('text').text(s).node().getComputedTextLength()) || 90) + 12; tmp.remove();
+  const H = m.t + m.b + sectors.length * ch;
+  svg.attr('viewBox', `0 0 ${W} ${H}`);
+  const x = d3.scaleBand().domain(eps.map((e) => e.ep)).range([m.l, W - m.r]).padding(0.06);
+  const y = d3.scaleBand().domain(sectors).range([m.t, H - m.b]).padding(0.06);
+  const lim = d3.max(se, (r) => Math.abs(r.ret)) || 0.3;
+  const fmt = d3.utcFormat('%b %y'), p = d3.utcParse('%Y-%m-%d');
+  svg.selectAll('text.h').data(eps).join('text').attr('x', (e) => x(e.ep) + x.bandwidth() / 2).attr('y', 12).attr('text-anchor', 'middle').text((e) => fmt(p(e.peak)));
+  svg.selectAll('text.h2').data(eps).join('text').attr('x', (e) => x(e.ep) + x.bandwidth() / 2).attr('y', 26).attr('text-anchor', 'middle').text((e) => 'index ' + sbPct(e.index_dd, 0));
+  svg.selectAll('text.s').data(sectors).join('text').attr('x', m.l - 6).attr('y', (s) => y(s) + y.bandwidth() / 2 + 4).attr('text-anchor', 'end').text((s) => s);
+  const tip = sbTip(el);
+  const cell = svg.selectAll('g.c').data(se).join('g');
+  cell.append('rect').attr('x', (r) => x(r.ep)).attr('y', (r) => y(r.sector)).attr('width', x.bandwidth()).attr('height', y.bandwidth()).attr('rx', 2)
+    .style('fill', (r) => r.ret < 0 ? 'var(--color-bad)' : 'var(--color-ok)').style('opacity', (r) => 0.12 + 0.7 * Math.min(1, Math.abs(r.ret) / lim))
+    .on('pointermove', (ev, r) => { const e = eps.find((q) => q.ep === r.ep); tip.show(ev, [r.sector, 'Pullback from ' + sbDate(e.peak), 'Sector ' + sbPct(r.ret) + ', index ' + sbPct(e.index_dd), r.rebound != null ? '20 days after the low: ' + sbPct(r.rebound) : '']); })
+    .on('pointerleave', () => tip.hide());
+  if (x.bandwidth() > 38) cell.append('text').attr('x', (r) => x(r.ep) + x.bandwidth() / 2).attr('y', (r) => y(r.sector) + y.bandwidth() / 2 + 4).attr('text-anchor', 'middle')
+    .style('fill', 'var(--color-fg)').style('pointer-events', 'none').text((r) => sbPct(r.ret, 0));
+});
+</script>
+
+<script>
+dash.draw('sectorpick', (sel) => {
+  const s = sbRows('stocks');
+  const secs = s ? [...new Set(s.map((r) => r.sector))].sort() : [];
+  sel.replaceChildren(new Option('All sectors', ''), ...secs.map((x) => new Option(x, x)));
+  sel.value = SB.sector;
+  sel.onchange = () => { SB.sector = sel.value; dash.draw('scatter'); dash.draw('stocktable'); };
+});
+
+dash.draw('scatter', (el) => {
+  const s = sbRows('stocks');
+  if (!s) { sbEmpty(el, 'stocks'); return; }
+  el.classList.remove('dash-skeleton');
+  el.setAttribute('data-source', 'stocks');
+  const rows = s.filter((r) => r.beta_down != null && r.ep_rs_med != null);
+  const W = el.clientWidth || 600, H = 360, m = { t: 12, r: 16, b: 36, l: 48 };
+  el.replaceChildren();
+  const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('role', 'img')
+    .attr('aria-label', 'Each stock: downside beta against median return versus the index during pullbacks');
+  const x = d3.scaleLinear().domain(d3.extent(rows, (r) => r.beta_down)).nice().range([m.l, W - m.r]);
+  const y = d3.scaleLinear().domain(d3.extent(rows, (r) => r.ep_rs_med)).nice().range([H - m.b, m.t]);
+  svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(6));
+  svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(6).tickFormat((v) => sbPct(v, 0)));
+  svg.append('text').attr('x', W - m.r).attr('y', H - 4).attr('text-anchor', 'end').text('Downside beta →');
+  svg.append('text').attr('x', m.l + 4).attr('y', m.t + 4).text('↑ beats index in pullbacks');
+  svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(0)).attr('y2', y(0)).style('stroke', 'var(--cds-chart-reference)').style('stroke-dasharray', '3 3');
+  if (x.domain()[0] < 1 && x.domain()[1] > 1) svg.append('line').attr('x1', x(1)).attr('x2', x(1)).attr('y1', m.t).attr('y2', H - m.b).style('stroke', 'var(--cds-chart-reference)').style('stroke-dasharray', '3 3');
+  const tip = sbTip(el);
+  const on = (r) => !SB.sector || r.sector === SB.sector;
+  svg.selectAll('circle').data(rows).join('circle').attr('cx', (r) => x(r.beta_down)).attr('cy', (r) => y(r.ep_rs_med)).attr('r', (r) => on(r) ? 5 : 3.5)
+    .style('fill', (r) => on(r) ? dash.colors[0] : 'var(--cds-chart-muted)').style('opacity', (r) => on(r) ? 0.9 : 0.5)
+    .on('pointermove', (ev, r) => tip.show(ev, [r.t + ' · ' + r.sector, r.name, 'Downside beta ' + r.beta_down.toFixed(2), 'Median vs index in pullbacks ' + sbPct(r.ep_rs_med), 'Beat the index in ' + r.ep_held + ' of ' + r.ep_n + ' pullbacks']))
+    .on('pointerleave', () => tip.hide());
+  const lab = SB.sector ? rows.filter(on) : [...rows].sort((a, b) => b.ep_rs_med - a.ep_rs_med).slice(0, 4).concat([...rows].sort((a, b) => a.ep_rs_med - b.ep_rs_med).slice(0, 4), [...rows].sort((a, b) => b.beta_down - a.beta_down).slice(0, 2));
+  svg.selectAll('text.lab').data([...new Set(lab)]).join('text').attr('x', (r) => x(r.beta_down) + 7).attr('y', (r) => y(r.ep_rs_med) + 4).text((r) => r.t)
+    .style('fill', 'var(--color-fg)').style('pointer-events', 'none');
+});
+
+dash.draw('stocktable', (tb) => {
+  const s = sbRows('stocks');
+  tb.replaceChildren();
+  if (!s) return;
+  const k = SB.sort.key, dir = SB.sort.dir;
+  const rows = s.filter((r) => !SB.sector || r.sector === SB.sector).sort((a, b) => {
+    const va = a[k], vb = b[k];
+    if (va == null) return 1; if (vb == null) return -1;
+    return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * dir;
+  });
+  rows.forEach((r) => {
+    const tr = document.createElement('tr'); tr.setAttribute('data-key', r.m + ',' + r.t);
+    [[r.t, 'sb-l', r.name], [r.sector, 'sb-l'], [r.beta_down == null ? '—' : r.beta_down.toFixed(2), r.beta_down > 1.3 ? 'sb-bad' : ''],
+     [r.ep_held + ' of ' + r.ep_n, ''], [sbPct(r.ep_rs_med), r.ep_rs_med > 0 ? 'sb-ok' : 'sb-bad'], [sbPct(r.ep_rebound_med), ''],
+     [sbPct(r.max_dd), ''], [sbPct(r.cur_dd), r.cur_dd < -0.3 ? 'sb-bad' : ''], [sbPct(r.rs20), r.rs20 > 0 ? 'sb-ok' : 'sb-bad'],
+     [r.above_50 == null ? '—' : r.above_50 ? 'yes' : 'no', '']]
+      .forEach(([t, c, title]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; if (title) td.title = title; tr.append(td); });
+    tb.append(tr);
+  });
+});
+
+dash.draw('watch', (el) => {
+  const s = sbRows('stocks');
+  if (!s) { sbEmpty(el, 'stocks'); return; }
+  el.classList.remove('dash-skeleton');
+  const live = s.filter((r) => r.rs20 != null && r.last_date === d3.max(s, (q) => q.last_date));
+  const best = [...live].sort((a, b) => b.rs20 - a.rs20).slice(0, 10), worst = [...live].sort((a, b) => a.rs20 - b.rs20).slice(0, 10);
+  const block = (title, list) => {
+    const d = document.createElement('div'); const h = document.createElement('div'); h.className = 'sb-muted'; h.textContent = title;
+    const ol = document.createElement('ol');
+    list.forEach((r) => {
+      const li = document.createElement('li'); li.append(r.t + ' (' + r.sector + ') ');
+      const v = document.createElement('span'); v.setAttribute('data-source', 'stocks'); v.setAttribute('data-field', 'rs20'); v.setAttribute('data-where', 'm=' + r.m + '&t=' + encodeURIComponent(r.t));
+      v.className = r.rs20 > 0 ? 'sb-ok' : 'sb-bad'; v.textContent = sbPct(r.rs20);
+      li.append(v, r.above_50 ? ', above 50-day' : ', below 50-day'); ol.append(li);
+    });
+    d.append(h, ol); return d;
+  };
+  el.replaceChildren(block('Holding up best', best), block('Breaking down most', worst));
+});
+
+window.sbFall = () => { const i = document.querySelector('#sb-fall'); return i ? Number(i.value) / 100 : 0.1; };
+dash.draw('falllabel', (el) => { el.textContent = '−' + Math.round(sbFall() * 100) + '%'; });
+dash.draw('stresstable', (tb) => {
+  const s = sbRows('stocks');
+  tb.replaceChildren();
+  if (!s) return;
+  const X = -sbFall();
+  const rows = s.filter((r) => r.beta_down != null).map((r) => {
+    const est = Math.max(-0.95, r.beta_down * X);
+    const a = r.ep_capture_q1 == null ? null : Math.max(-0.95, r.ep_capture_q1 * X), b = r.ep_capture_q3 == null ? null : Math.max(-0.95, r.ep_capture_q3 * X);
+    return { r, est, lo: a == null ? null : Math.min(a, b), hi: a == null ? null : Math.max(a, b) };
+  }).sort((p, q) => p.est - q.est);
+  rows.forEach(({ r, est, lo, hi }) => {
+    const tr = document.createElement('tr');
+    [[r.t, 'sb-l'], [r.sector, 'sb-l'], [sbPct(est), est < X ? 'sb-bad' : est > X / 2 ? 'sb-ok' : ''], [lo == null ? '—' : sbPct(lo, 0) + ' to ' + sbPct(hi, 0), '']]
+      .forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.append(td); });
+    tb.append(tr);
+  });
+});
+</script>
+<script>
+dash.draw('updated', (el) => {
+  const m = DATA.meta;
+  el.textContent = m ? 'Updated ' + m.generated + ' Bangkok time.' : '';
+});
+dash.draw('excluded', (el) => {
+  const s = dash.data('state');
+  el.textContent = s.status === 'ok' ? (s.data.map((r) => r.excluded).filter(Boolean).join(', ') || 'none') : '—';
+});
+window.sbLog = () => { const h = dash.data('history'); return h.status === 'ok' ? h.data.filter((r) => r.m === SB.m) : []; };
+dash.draw('lookline', (el) => {
+  const r = sbRows('state');
+  if (!r) { sbEmpty(el, 'state'); return; }
+  el.classList.remove('dash-skeleton');
+  const s = r[0];
+  const nm = SB.m === 'us' ? 'The Nasdaq-100' : 'The SET50 fund (TDEX)';
+  el.textContent = nm + ' closed at ' + d3.format(',.2f')(s.index_last) + ' on ' + sbDate(s.last_date) + ', ' + sbPct(s.index_r1) + ' on the day and ' +
+    sbPct(-s.index_dd, 1, false) + ' below its ' + sbDate(s.index_peak_date) + ' high. It is ' + (s.index_above_50 ? 'above' : 'below') + ' its 50-day average and ' +
+    (s.index_above_200 ? 'above' : 'below') + ' its 200-day average.';
+});
+dash.draw('flags', (ul) => {
+  ul.replaceChildren();
+  const r = sbRows('state');
+  if (!r) return;
+  const s = r[0], log = sbLog();
+  const prev = log.length > 1 ? log[log.length - 2] : null;
+  const out = [];
+  if (prev) [0.1, 0.2, 0.25].forEach((t) => {
+    if (s.index_dd <= -t && prev.dd > -t) out.push('Crossed below the ' + Math.round(t * 100) + '% line from the high on the last day.');
+    if (s.index_dd > -t && prev.dd <= -t) out.push('Climbed back above the ' + Math.round(t * 100) + '% line from the high on the last day.');
+  });
+  if (s.index_dd === 0) out.push('New closing high.');
+  if (Math.abs(s.index_r1) >= 0.03) out.push('A ' + sbPct(s.index_r1) + ' day, a move of 3% or more.');
+  if (s.pct_above_50_5d != null && Math.abs(s.pct_above_50 - s.pct_above_50_5d) >= 0.15) out.push('The share of stocks above their 50-day average moved from ' + sbPct(s.pct_above_50_5d, 0, false) + ' to ' + sbPct(s.pct_above_50, 0, false) + ' in 5 trading days.');
+  out.forEach((t) => { const li = document.createElement('li'); li.textContent = t; ul.append(li); });
+});
+dash.draw('levels', (tb) => {
+  tb.replaceChildren();
+  const r = sbRows('state');
+  if (!r) return;
+  const s = r[0], c = s.index_last, f = d3.format(',.2f');
+  [['Closing high, ' + sbDate(s.index_peak_date), s.index_peak], ['10% below the high', s.lv10], ['20% below the high', s.lv20], ['25% below the high', s.lv25], ['50-day average', s.ma50], ['200-day average', s.ma200]]
+    .sort((a, b) => b[1] - a[1]).forEach(([label, v]) => {
+      const tr = document.createElement('tr');
+      const dist = v / c - 1;
+      [[label, 'sb-l'], [f(v), ''], [(dist >= 0 ? sbPct(dist) + ' above' : sbPct(-dist, 1, false) + ' below'), c < v ? '' : 'sb-bad']]
+        .forEach(([t, cl]) => { const td = document.createElement('td'); td.textContent = t; if (cl) td.className = cl; tr.append(td); });
+      tb.append(tr);
+    });
+});
+dash.draw('sectortoday', (tb) => {
+  tb.replaceChildren();
+  const s = sbRows('sectors');
+  if (!s) return;
+  const ix = s[0];
+  const head = document.createElement('tr');
+  [['Index', 'sb-l'], [sbPct(ix.index_r1), ''], [sbPct(ix.index_r5), ''], ['1.00', '']].forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; td.style.fontWeight = '600'; head.append(td); });
+  tb.append(head);
+  [...s].sort((a, b) => a.r5 - b.r5).forEach((r) => {
+    const tr = document.createElement('tr');
+    [[r.sector, 'sb-l'], [sbPct(r.r1), r.r1 < 0 ? 'sb-bad' : 'sb-ok'], [sbPct(r.r5), r.r5 < 0 ? 'sb-bad' : 'sb-ok'], [r.beta_down.toFixed(2).replace('-', '−'), '']]
+      .forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.append(td); });
+    tb.append(tr);
+  });
+});
+dash.draw('movers', (el) => {
+  const s = sbRows('stocks');
+  if (!s) { sbEmpty(el, 'stocks'); return; }
+  el.classList.remove('dash-skeleton');
+  const last = d3.max(s, (r) => r.last_date);
+  const live = s.filter((r) => r.last_date === last && r.r1 != null);
+  const dn = live.filter((r) => r.r1 <= -0.07).sort((a, b) => a.r1 - b.r1), up = live.filter((r) => r.r1 >= 0.07).sort((a, b) => b.r1 - a.r1);
+  const fmt = (l) => l.map((r) => r.t + ' ' + sbPct(r.r1, 1)).join(', ');
+  el.textContent = (dn.length ? 'Down 7% or more: ' + fmt(dn) + '. ' : 'No stock fell 7% or more. ') + (up.length ? 'Up 7% or more: ' + fmt(up) + '.' : 'No stock rose 7% or more.');
+});
+dash.draw('log', (tb) => {
+  tb.replaceChildren();
+  const f = SB.m === 'us' ? d3.format(',.2f') : d3.format('.2f');
+  [...sbLog()].reverse().forEach((r) => {
+    const tr = document.createElement('tr');
+    [[sbDate(r.date), 'sb-l'], [f(r.index), ''], [sbPct(r.r1), r.r1 < 0 ? 'sb-bad' : 'sb-ok'], [sbPct(r.dd), ''],
+     [r.pct_above_50 == null ? '—' : sbPct(r.pct_above_50, 0, false), ''], [r.pct_20_off_high == null ? '—' : sbPct(r.pct_20_off_high, 0, false), '']]
+      .forEach(([t, c]) => { const td = document.createElement('td'); td.textContent = t; if (c) td.className = c; tr.append(td); });
+    tb.append(tr);
+  });
+});
+
+(async () => {
+  const names = ['state', 'stocks', 'episodes', 'epstock', 'sectors', 'sectorep', 'series', 'history', 'meta'];
+  const v = Date.now().toString(36);
+  try {
+    const res = await Promise.all(names.map((n) => fetch('data/' + n + '.json?v=' + v).then((r) => { if (!r.ok) throw new Error(n); return r.json(); })));
+    names.forEach((n, i) => { DATA[n] = res[i]; });
+  } catch (e) { console.error(e); LOADERR = true; }
+  dash.drawAll();
+  let t;
+  window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => dash.drawAll(), 150); });
+})();
+</script>
+<p class="foot">Data: Yahoo Finance daily closes, refreshed automatically after the Thai and US market closes. Not financial advice. Source code: <a href="https://github.com/kaorii-ako/the-lookout">kaorii-ako/the-lookout</a>.</p>
+</div>
+</body>
+</html>
