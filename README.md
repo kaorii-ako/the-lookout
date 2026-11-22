@@ -8,7 +8,7 @@ The data refreshes on weekdays at 17:20 Bangkok time (after the Thai close) and 
 
 ## How it works
 
-- `scripts/fetch.py` downloads two years of daily prices from Yahoo Finance into `raw/`.
+- `scripts/fetch.py` downloads two years of daily prices from Yahoo Finance with yfinance into `raw/`. `names.json` holds company names.
 - `scripts/analyze.py` finds pullbacks, downside betas, sector behaviour and the current state.
 - `scripts/export.py` writes the JSON files the page reads into `site/data/`, and appends one row per trading day to `site/data/history.json`.
 - `site/index.html` is the page. It loads d3 from jsDelivr and draws everything in the browser.
